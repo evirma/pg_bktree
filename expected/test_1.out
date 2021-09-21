@@ -1,0 +1,148 @@
+-- int8 check
+-- SELECT pg_sleep(20);
+CREATE TABLE test1_tmp_table (a int8);
+\copy test1_tmp_table from 'data/test_data_1.data'
+CREATE INDEX test1_tmp_table_idx ON test1_tmp_table USING spgist ( a bktree_ops );
+SET enable_seqscan=off;
+-- These should work (I'm not sure how)
+SELECT count(*) FROM test1_tmp_table WHERE a  = 464571291354841::int8;
+ count 
+-------
+     0
+(1 row)
+
+SELECT count(*) FROM test1_tmp_table WHERE a  = 7::int8;
+ count 
+-------
+     1
+(1 row)
+
+EXPLAIN (COSTS OFF) SELECT count(*) FROM test1_tmp_table WHERE a  = 7::int8;
+                             QUERY PLAN                             
+--------------------------------------------------------------------
+ Aggregate
+   ->  Index Only Scan using test1_tmp_table_idx on test1_tmp_table
+         Index Cond: (a = '7'::bigint)
+(3 rows)
+
+-- These should fail, since we don't provide operators
+-- for the relevant conditionals (<, >, <=, >=)
+-- Apparently the SP-GiST system just coerces the
+-- result to an empty set if it doesn't know how
+-- to apply the operator
+SELECT count(*) FROM test1_tmp_table WHERE a  < 7::int8;
+ count 
+-------
+     0
+(1 row)
+
+SELECT count(*) FROM test1_tmp_table WHERE a  > 7::int8;
+ count 
+-------
+     0
+(1 row)
+
+SELECT count(*) FROM test1_tmp_table WHERE a  <= 7::int8;
+ count 
+-------
+     0
+(1 row)
+
+SELECT count(*) FROM test1_tmp_table WHERE a  >= 7::int8;
+ count 
+-------
+     0
+(1 row)
+
+-- Search value
+SELECT int64_to_bitstring(5);
+                        int64_to_bitstring                        
+------------------------------------------------------------------
+ 0000000000000000000000000000000000000000000000000000000000000101
+(1 row)
+
+-- Now the actual searches.
+SELECT a, a <@ (5, 1), a <-> 5, int64_to_bitstring(a) FROM test1_tmp_table WHERE  a <@ (5, 1);
+ a | ?column? | ?column? |                        int64_to_bitstring                        
+---+----------+----------+------------------------------------------------------------------
+ 5 | t        |        0 | 0000000000000000000000000000000000000000000000000000000000000101
+ 1 | t        |        1 | 0000000000000000000000000000000000000000000000000000000000000001
+ 7 | t        |        1 | 0000000000000000000000000000000000000000000000000000000000000111
+ 4 | t        |        1 | 0000000000000000000000000000000000000000000000000000000000000100
+(4 rows)
+
+SELECT a, a <@ (5, 2), a <-> 5, int64_to_bitstring(a) FROM test1_tmp_table WHERE  a <@ (5, 2);
+ a | ?column? | ?column? |                        int64_to_bitstring                        
+---+----------+----------+------------------------------------------------------------------
+ 5 | t        |        0 | 0000000000000000000000000000000000000000000000000000000000000101
+ 6 | t        |        2 | 0000000000000000000000000000000000000000000000000000000000000110
+ 0 | t        |        2 | 0000000000000000000000000000000000000000000000000000000000000000
+ 1 | t        |        1 | 0000000000000000000000000000000000000000000000000000000000000001
+ 7 | t        |        1 | 0000000000000000000000000000000000000000000000000000000000000111
+ 3 | t        |        2 | 0000000000000000000000000000000000000000000000000000000000000011
+ 4 | t        |        1 | 0000000000000000000000000000000000000000000000000000000000000100
+ 9 | t        |        2 | 0000000000000000000000000000000000000000000000000000000000001001
+(8 rows)
+
+SELECT a, a <@ (5, 2), a <-> 5, int64_to_bitstring(a) FROM test1_tmp_table WHERE  a <@ (5, 3);
+ a | ?column? | ?column? |                        int64_to_bitstring                        
+---+----------+----------+------------------------------------------------------------------
+ 5 | t        |        0 | 0000000000000000000000000000000000000000000000000000000000000101
+ 6 | t        |        2 | 0000000000000000000000000000000000000000000000000000000000000110
+ 0 | t        |        2 | 0000000000000000000000000000000000000000000000000000000000000000
+ 1 | t        |        1 | 0000000000000000000000000000000000000000000000000000000000000001
+ 2 | f        |        3 | 0000000000000000000000000000000000000000000000000000000000000010
+ 7 | t        |        1 | 0000000000000000000000000000000000000000000000000000000000000111
+ 8 | f        |        3 | 0000000000000000000000000000000000000000000000000000000000001000
+ 3 | t        |        2 | 0000000000000000000000000000000000000000000000000000000000000011
+ 4 | t        |        1 | 0000000000000000000000000000000000000000000000000000000000000100
+ 9 | t        |        2 | 0000000000000000000000000000000000000000000000000000000000001001
+(10 rows)
+
+SELECT a, a <@ (5, 4), a <-> 5, int64_to_bitstring(a) FROM test1_tmp_table WHERE  a <@ (5, 4);
+ a | ?column? | ?column? |                        int64_to_bitstring                        
+---+----------+----------+------------------------------------------------------------------
+ 5 | t        |        0 | 0000000000000000000000000000000000000000000000000000000000000101
+ 6 | t        |        2 | 0000000000000000000000000000000000000000000000000000000000000110
+ 0 | t        |        2 | 0000000000000000000000000000000000000000000000000000000000000000
+ 1 | t        |        1 | 0000000000000000000000000000000000000000000000000000000000000001
+ 2 | t        |        3 | 0000000000000000000000000000000000000000000000000000000000000010
+ 7 | t        |        1 | 0000000000000000000000000000000000000000000000000000000000000111
+ 8 | t        |        3 | 0000000000000000000000000000000000000000000000000000000000001000
+ 3 | t        |        2 | 0000000000000000000000000000000000000000000000000000000000000011
+ 4 | t        |        1 | 0000000000000000000000000000000000000000000000000000000000000100
+ 9 | t        |        2 | 0000000000000000000000000000000000000000000000000000000000001001
+(10 rows)
+
+EXPLAIN (COSTS OFF)
+SELECT a, a <@ (5, 1), a <-> 5, int64_to_bitstring(a) FROM test1_tmp_table WHERE  a <@ (5, 1);
+                          QUERY PLAN                          
+--------------------------------------------------------------
+ Index Only Scan using test1_tmp_table_idx on test1_tmp_table
+   Index Cond: (a <@ ROW('5'::bigint, '1'::bigint))
+(2 rows)
+
+EXPLAIN (COSTS OFF)
+SELECT a, a <@ (5, 2), a <-> 5, int64_to_bitstring(a) FROM test1_tmp_table WHERE  a <@ (5, 2);
+                          QUERY PLAN                          
+--------------------------------------------------------------
+ Index Only Scan using test1_tmp_table_idx on test1_tmp_table
+   Index Cond: (a <@ ROW('5'::bigint, '2'::bigint))
+(2 rows)
+
+EXPLAIN (COSTS OFF)
+SELECT a, a <@ (5, 2), a <-> 5, int64_to_bitstring(a) FROM test1_tmp_table WHERE  a <@ (5, 3);
+                          QUERY PLAN                          
+--------------------------------------------------------------
+ Index Only Scan using test1_tmp_table_idx on test1_tmp_table
+   Index Cond: (a <@ ROW('5'::bigint, '3'::bigint))
+(2 rows)
+
+EXPLAIN (COSTS OFF)
+SELECT a, a <@ (5, 4), a <-> 5, int64_to_bitstring(a) FROM test1_tmp_table WHERE  a <@ (5, 4);
+                          QUERY PLAN                          
+--------------------------------------------------------------
+ Index Only Scan using test1_tmp_table_idx on test1_tmp_table
+   Index Cond: (a <@ ROW('5'::bigint, '4'::bigint))
+(2 rows)
+

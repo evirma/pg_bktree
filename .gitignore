@@ -1,0 +1,8 @@
+# Generated subdirectories
+.idea
+*.bc
+/log/
+/results/
+/tmp_check/
+*.so
+*.o
