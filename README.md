@@ -1,18 +1,20 @@
 pg_bktree hamming
 =================
 
-Extension Was Fixed To Build With Postgresql 13
+Extension Was Fixed To Build With Postgresql 15
 
 HOT TO BUILD
 
+``` bash
 apt-get update
-apt-get install -y git make build-essential postgresql-server-dev-13
+apt-get install -y git make build-essential postgresql-server-dev-15
 git clone git@github.com:evirma/pg_bktree.git /usr/local/src/bktree
 cd /usr/local/src/bktree
 make USE_PGXS=1 && make USE_PGXS=1 install
-apt-get remove -y git make build-essential postgresql-server-dev-9.6
+apt-get remove -y git make build-essential postgresql-server-dev-15
 apt-get purge
 apt-get clean
+```
 
 psql -c "CREATE EXTENSION bktree" -d your_database
 
